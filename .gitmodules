@@ -1,0 +1,3 @@
+[submodule "MixFormer"]
+	path = MixFormer
+	url = git@github.com:MCG-NJU/MixFormer.git
