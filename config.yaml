@@ -1,0 +1,9 @@
+url: http://localhost:8080
+api: 
+project_id: 8
+local_folder: C:\Projects\video_labeling\data\0001-0010
+tracker:
+  name: tamos
+  start_task_id: 3847 # If None the last labaled task will be used.
+  end_task_id: 3946
+  n_frames_to_track: 5
