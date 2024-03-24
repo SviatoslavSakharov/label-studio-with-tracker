@@ -1,1 +1,4 @@
 
+[submodule "pytracking"]
+	path = pytracking
+	url = git@github.com:visionml/pytracking.git
