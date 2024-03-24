@@ -32,12 +32,18 @@ class Task:
         """Check if the task is annotated"""
         return len(self.annotations["labels"]) > 0
 
+    def get_json(self):
+        return self.json
+
     def get_cv2_image(self):
         """Get the image as a cv2 image"""
         image = cv2.imread(str(self.file_path))
         if self.image_shape == (None, None):
             self.image_shape = image.shape[:2]
         return image
+
+    def clear_annotations(self):
+        self.annotations = {"labels": [], "bboxes": []}
 
     def set_annotation(self, label, bbox):
         self.annotations["labels"].append(label)
@@ -51,7 +57,7 @@ class Task:
         bboxes = annotations["bboxes"]
         labels = annotations["labels"]
         for i, bbox in enumerate(bboxes):
-            x, y, w, h = bbox
+            x, y, w, h = [int(coord) for coord in bbox]
             cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(
                 image,
@@ -79,29 +85,32 @@ class Task:
     def _extract_annotations(self):
         if len(self.json["annotations"]) > 0:
             annotations = self.json["annotations"][0]["result"]
-            image_shape = (annotations[0]["original_height"], annotations[0]["original_width"])
-            self.image_shape = image_shape
-            for annotation in annotations:
-                x = annotation["value"]["x"]
-                y = annotation["value"]["y"]
-                width = annotation["value"]["width"]
-                height = annotation["value"]["height"]
-                bbox = [
-                    x / 100 if x > 1 else x,
-                    y / 100 if y > 1 else y,
-                    width / 100 if width > 1 else width,
-                    height / 100 if height > 1 else height,
-                ]
-                bbox_cv2 = self._convert_bbox_from_yolo_to_cv2(bbox)
-                label = annotation["value"]["rectanglelabels"][0]
-                self.annotations["labels"].append(label)
-                self.annotations["bboxes"].append(bbox_cv2)
+            try:
+                image_shape = (annotations[0]["original_height"], annotations[0]["original_width"])
+                self.image_shape = image_shape
+                for annotation in annotations:
+                    x = annotation["value"]["x"]
+                    y = annotation["value"]["y"]
+                    width = annotation["value"]["width"]
+                    height = annotation["value"]["height"]
+                    bbox = [
+                        x / 100,  # if x > 1 else x,
+                        y / 100,  # if y > 1 else y,
+                        width / 100,  # if width > 1 else width,
+                        height / 100,  # if height > 1 else height,
+                    ]
+                    bbox_cv2 = self._convert_bbox_from_yolo_to_cv2(bbox)
+                    label = annotation["value"]["rectanglelabels"][0]
+                    self.annotations["labels"].append(label)
+                    self.annotations["bboxes"].append(bbox_cv2)
+            except:
+                print(f"WARNING: Task {self.id} cannot extract annotations")
 
     def _convert_bbox_from_yolo_to_cv2(self, bbox):
-        x = int(bbox[0] * self.image_shape[1])
-        y = int(bbox[1] * self.image_shape[0])
-        w = int(bbox[2] * self.image_shape[1])
-        h = int(bbox[3] * self.image_shape[0])
+        x = bbox[0] * self.image_shape[1]
+        y = bbox[1] * self.image_shape[0]
+        w = bbox[2] * self.image_shape[1]
+        h = bbox[3] * self.image_shape[0]
         return (x, y, w, h)
 
     def _convert_bbox_from_cv2_to_yolo(self, bbox):

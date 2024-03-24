@@ -12,5 +12,5 @@ if __name__ == "__main__":
     tasks = project.get_tasks()
 
     headers = {"Authorization": f"Token {API_KEY}"}
-    task_ids_to_delete = np.arange(132, 137)
+    task_ids_to_delete = np.arange(152, 154)
     delete_annotations_from_tasks(headers, tasks, task_ids_to_delete)

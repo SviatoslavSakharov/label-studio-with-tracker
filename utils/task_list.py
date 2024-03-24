@@ -1,14 +1,20 @@
 from utils.task import Task
-from utils.trackers import create_tracker_nano
 from label_studio_sdk import Project
 from typing import List
+from tqdm import tqdm
+import requests
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 
 class TaskList:
-    def __init__(self, tasks_json: list, project: Project):
+    def __init__(self, tasks_json: list, project: Project, api_key: str, url: str):
         self.project: Project = project
         self.tasks: List[Task] = [Task(task, project) for task in tasks_json]
         self.task_lookup: dict = {task.get_id(): task for task in self.tasks}
+        self.api_key = api_key
+        self.header = {"Authorization": f"Token {self.api_key}"}
+        self.url = url
 
     def get_all_tasks(self):
         """Get all tasks"""
@@ -27,25 +33,42 @@ class TaskList:
                 break
         return last_annotated_task
 
-    def track_n_frames(self, last_annotated_task, n_frames):
-        frame = last_annotated_task.get_cv2_image()
-        init_bboxes = last_annotated_task.get_annotations()["bboxes"]
-        labels = last_annotated_task.get_annotations()["labels"]
-        trackers = [create_tracker_nano() for _ in range(len(init_bboxes))]
-        for i, tracker in enumerate(trackers):
-            tracker.init(frame, init_bboxes[i])
-        # ### get the next n_frames
-        for task_id in range(last_annotated_task.get_id() + 1, last_annotated_task.get_id() + n_frames + 1):
+    def track_n_frames(self, starting_task, n_frames, tracker):
+        frame = starting_task.get_cv2_image()
+        init_bboxes = starting_task.get_annotations()["bboxes"]
+        labels = starting_task.get_annotations()["labels"]
+        tracker.initialize(frame, init_bboxes, labels)
+        print(
+            f"Tracking {n_frames} frames from task {starting_task.get_id()} to task {starting_task.get_id() + n_frames}"
+        )
+        for task_id in tqdm(range(starting_task.get_id() + 1, starting_task.get_id() + n_frames + 1)):
             task = self.get_task_by_id(task_id)
             frame = task.get_cv2_image()
-            for label, tracker in zip(labels, trackers):
-                ok, bbox = tracker.update(frame)
-                if ok:
-                    task.set_annotation(label, bbox)
-                else:
-                    print(f"Tracker for label {label} for task {tasl.get_id()} failed")
+            labels, bboxes = tracker.track(frame)
+            for label, bbox in zip(labels, bboxes):
+                task.set_annotation(label, bbox)
 
-    def upload_annotations(self, last_annotated_task, n_frames):
-        for task_id in range(last_annotated_task.get_id() + 1, last_annotated_task.get_id() + n_frames + 1):
+    def upload_annotations(self, starting_task, n_frames):
+        for task_id in range(starting_task.get_id() + 1, starting_task.get_id() + n_frames + 1):
             task = self.get_task_by_id(task_id)
             task.upload_annotations()
+
+    def delete_present_annotations(self, starting_task, n_frames):
+        annotation_ids = []
+        for task_id in range(starting_task.get_id() + 1, starting_task.get_id() + n_frames + 1):
+            task = self.get_task_by_id(task_id)
+            for annotation in task.get_json()["annotations"]:
+                annotation_ids.append(annotation["id"])
+            task.clear_annotations()
+        print(
+            f"Deleting {len(annotation_ids)} annotations from tasks {starting_task.get_id() + 1} to {starting_task.get_id() + n_frames}"
+        )
+        self.delete_annotations_request(annotation_ids)
+
+    def delete_annotations_request(self, annotation_ids):
+        def delete_annotation(annotation_id):
+            url = f"{self.url}/api/annotations/{annotation_id}"
+            requests.delete(url, headers=self.header)
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            list(tqdm(executor.map(delete_annotation, annotation_ids), total=len(annotation_ids)))
