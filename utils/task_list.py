@@ -5,16 +5,21 @@ from tqdm import tqdm
 import requests
 from concurrent.futures import ThreadPoolExecutor
 import time
+import numpy as np
+from omegaconf import DictConfig
 
 
 class TaskList:
-    def __init__(self, tasks_json: list, project: Project, api_key: str, url: str):
+    def __init__(self, project: Project, cfg: DictConfig):
         self.project: Project = project
-        self.tasks: List[Task] = [Task(task, project) for task in tasks_json]
+        only_needed_tasks = [
+            project.get_task(task_id) for task_id in np.arange(cfg.tracker.start_task_id, cfg.tracker.end_task_id + 1)
+        ]
+        self.tasks: List[Task] = [Task(task, project) for task in only_needed_tasks]
         self.task_lookup: dict = {task.get_id(): task for task in self.tasks}
-        self.api_key = api_key
+        self.api_key = cfg.api
         self.header = {"Authorization": f"Token {self.api_key}"}
-        self.url = url
+        self.url = cfg.url
 
     def get_all_tasks(self):
         """Get all tasks"""
@@ -45,6 +50,15 @@ class TaskList:
             task = self.get_task_by_id(task_id)
             frame = task.get_cv2_image()
             labels, bboxes = tracker.track(frame)
+            for label, bbox in zip(labels, bboxes):
+                task.set_annotation(label, bbox)
+
+    def interpolate_n_frames(self, starting_task, n_frames, interpolator):
+        print(f"Interpolating annotations from task {starting_task.get_id()} to task {starting_task.get_id() + 1}")
+        for task_id in tqdm(range(starting_task.get_id() + 1, starting_task.get_id() + n_frames + 1)):
+            task = self.get_task_by_id(task_id)
+            frame = task.get_cv2_image()  # just to save the image shape
+            labels, bboxes = interpolator.track(task_id)
             for label, bbox in zip(labels, bboxes):
                 task.set_annotation(label, bbox)
 

@@ -2,10 +2,11 @@ from label_studio_sdk import Client
 from pathlib import Path
 import helper as hp
 from utils.task_list import TaskList
-from utils.trackers import TrackerNano, TrackerTamos
+from utils.trackers import TrackerNano, TrackerTamos, Interpolator
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import time
+import numpy as np
 
 
 @hydra.main(config_path="", config_name="config")
@@ -19,7 +20,7 @@ def main(cfg: DictConfig) -> None:
     project = client.get_project(cfg.project_id)
 
     print(f"Loading all tasks from project {cfg.project_id}")
-    task_list = TaskList(project.get_tasks(), project, cfg.api, cfg.url)
+    task_list = TaskList(project, cfg)
     print(f"Loaded {len(task_list.get_all_tasks())} tasks")
 
     if cfg.tracker.start_task_id is not None:
@@ -43,11 +44,16 @@ def main(cfg: DictConfig) -> None:
         tracker = TrackerNano()
     elif cfg.tracker.name == "tamos":
         tracker = TrackerTamos()
+    elif cfg.tracker.name == "interpolator":
+        tracker = Interpolator(task_list, cfg)
     else:
         raise ValueError("Tracker type should be either 'nano' or 'tamos'")
 
     task_list.delete_present_annotations(start_task, n_frames_to_track)
-    task_list.track_n_frames(start_task, n_frames_to_track, tracker)
+    if cfg.tracker.name == "interpolator":
+        task_list.interpolate_n_frames(start_task, n_frames_to_track, tracker)
+    else:
+        task_list.track_n_frames(start_task, n_frames_to_track, tracker)
     print("Uploading annotations")
     task_list.upload_annotations(start_task, n_frames_to_track)
     print(" Finished ")

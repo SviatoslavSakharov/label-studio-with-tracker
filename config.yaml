@@ -1,9 +1,10 @@
 url: http://localhost:8080
-api: 
-project_id: 8
-local_folder: C:\Projects\video_labeling\data\0001-0010
+api: a6021e2d67c73b759f4a27967a4932a3fd0eb6df
+project_id: 11
+local_folder: C:\Projects\video_labeling\data_real\car_6
 tracker:
-  name: tamos
-  start_task_id: 3847 # If None the last labaled task will be used.
-  end_task_id: 3946
+  name: tamos # tamos or nano or interpolator
+  start_task_id: 8193 # If None the last labaled task will be used.
+  end_task_id: 8255
+  intermediate_task_ids: #[8056, 8065, 8073, 8082, 8089, 8100]
   n_frames_to_track: 5
